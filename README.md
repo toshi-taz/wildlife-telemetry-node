@@ -61,3 +61,4 @@ NODE_01,10.200350,-83.281900,2.1,8,2026-04-12T21:15:36Z
 Alexander Toshiro Bataz López  
 Ingeniería en Sistemas Energéticos y Redes Inteligentes — UPIEM–IPN  
 Conservation Technology | Wildlife Telemetry | IoT Sensor Networks
+z

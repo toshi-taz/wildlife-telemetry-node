@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wildlife Telemetry — Live Map</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 18px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1rem; font-weight: 600; letter-spacing: .03em; }
+    #status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #3fb950;
+      box-shadow: 0 0 6px #3fb950;
+      flex-shrink: 0;
+    }
+    #status-dot.error { background: #f85149; box-shadow: 0 0 6px #f85149; }
+    #last-update { margin-left: auto; font-size: .75rem; color: #8b949e; }
+
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    #map { flex: 1; }
+
+    #sidebar {
+      width: 240px;
+      background: #161b22;
+      border-left: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #sidebar h2 {
+      padding: 12px 14px;
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8b949e;
+      border-bottom: 1px solid #30363d;
+      flex-shrink: 0;
+    }
+    #node-list { overflow-y: auto; flex: 1; }
+    .node-card {
+      padding: 10px 14px;
+      border-bottom: 1px solid #21262d;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .node-card:hover { background: #21262d; }
+    .node-card .nid {
+      font-size: .85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .node-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .node-card .meta {
+      font-size: .72rem;
+      color: #8b949e;
+      margin-top: 3px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div id="status-dot"></div>
+  <h1>Wildlife Telemetry — Live Map</h1>
+  <span id="last-update">–</span>
+</header>
+
+<div id="main">
+  <div id="map"></div>
+  <aside id="sidebar">
+    <h2>Active Nodes</h2>
+    <div id="node-list"></div>
+  </aside>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Map setup — dark CartoDB tile layer
+// ---------------------------------------------------------------------------
+const map = L.map("map", {
+  center: [20.2988, -87.4578],
+  zoom: 13,
+  zoomControl: true,
+});
+
+L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  {
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains: "abcd",
+    maxZoom: 19,
+  }
+).addTo(map);
+
+// ---------------------------------------------------------------------------
+// Per-node palette (cycles after 12 nodes)
+// ---------------------------------------------------------------------------
+const PALETTE = [
+  "#3fb950","#58a6ff","#f78166","#d2a8ff",
+  "#ffa657","#79c0ff","#56d364","#ff7b72",
+  "#e3b341","#bc8cff","#2ea043","#1f6feb",
+];
+
+// State
+const nodeState = {};   // node_id -> { color, polyline, marker, lastPacket }
+let nodeIndex = 0;
+
+function colorFor(nodeId) {
+  if (!nodeState[nodeId]) {
+    nodeState[nodeId] = {
+      color: PALETTE[nodeIndex % PALETTE.length],
+      polyline: L.polyline([], { color: PALETTE[nodeIndex % PALETTE.length], weight: 2, opacity: .8 }).addTo(map),
+      marker: null,
+      lastPacket: null,
+    };
+    nodeIndex++;
+  }
+  return nodeState[nodeId].color;
+}
+
+// ---------------------------------------------------------------------------
+// Marker icon factory
+// ---------------------------------------------------------------------------
+function makeIcon(color) {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+      <circle cx="11" cy="11" r="7" fill="${color}" fill-opacity=".85" stroke="#0d1117" stroke-width="2"/>
+      <circle cx="11" cy="11" r="3" fill="#0d1117"/>
+    </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: "",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Poll /api/telemetry/live every 5 s
+// ---------------------------------------------------------------------------
+const STATUS_DOT = document.getElementById("status-dot");
+const LAST_UPDATE = document.getElementById("last-update");
+const NODE_LIST = document.getElementById("node-list");
+
+async function fetchLive() {
+  try {
+    const res = await fetch("/api/telemetry/live?limit=100");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();   // { NODE_01: [...], NODE_02: [...] }
+
+    STATUS_DOT.className = "";
+    LAST_UPDATE.textContent = new Date().toLocaleTimeString();
+
+    for (const [nodeId, packets] of Object.entries(data)) {
+      if (!packets.length) continue;
+
+      const color = colorFor(nodeId);
+      const state = nodeState[nodeId];
+
+      // Replace polyline points with full track
+      const latlngs = packets.map(p => [p.latitude, p.longitude]);
+      state.polyline.setLatLngs(latlngs);
+
+      // Move / create marker at latest position
+      const last = packets[packets.length - 1];
+      const pos = [last.latitude, last.longitude];
+      if (state.marker) {
+        state.marker.setLatLng(pos);
+      } else {
+        state.marker = L.marker(pos, { icon: makeIcon(color) })
+          .bindPopup("")
+          .addTo(map);
+      }
+
+      state.marker.getPopup().setContent(
+        `<b style="color:${color}">${nodeId}</b><br/>` +
+        `Camp: ${last.camp || "–"}<br/>` +
+        `Lat: ${last.latitude.toFixed(6)}<br/>` +
+        `Lon: ${last.longitude.toFixed(6)}<br/>` +
+        `Speed: ${last.speed ?? "–"} km/h<br/>` +
+        `Sats: ${last.satellites ?? "–"}<br/>` +
+        `<span style="font-size:.75em;color:#8b949e">${last.timestamp}</span>`
+      );
+
+      state.lastPacket = last;
+    }
+
+    renderSidebar(data);
+  } catch (err) {
+    STATUS_DOT.className = "error";
+    console.error("Live fetch error:", err);
+  }
+}
+
+function renderSidebar(data) {
+  NODE_LIST.innerHTML = "";
+  const sorted = Object.keys(data).sort();
+  if (!sorted.length) {
+    NODE_LIST.innerHTML = '<div style="padding:14px;font-size:.8rem;color:#8b949e">No data yet…</div>';
+    return;
+  }
+  for (const nodeId of sorted) {
+    const packets = data[nodeId];
+    if (!packets.length) continue;
+    const last = packets[packets.length - 1];
+    const color = colorFor(nodeId);
+    const card = document.createElement("div");
+    card.className = "node-card";
+    card.innerHTML = `
+      <div class="nid">
+        <span class="node-dot" style="background:${color}"></span>
+        ${nodeId}
+      </div>
+      <div class="meta">
+        Camp: ${last.camp || "–"}<br/>
+        ${last.latitude.toFixed(5)}, ${last.longitude.toFixed(5)}<br/>
+        ${last.timestamp}
+      </div>`;
+    card.addEventListener("click", () => {
+      map.setView([last.latitude, last.longitude], 15);
+      nodeState[nodeId]?.marker?.openPopup();
+    });
+    NODE_LIST.appendChild(card);
+  }
+}
+
+// Kick off immediately, then every 5 s
+fetchLive();
+setInterval(fetchLive, 5000);
+</script>
+</body>
+</html>

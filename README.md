@@ -52,6 +52,10 @@ wildlife-telemetry-node/
 NODE_ID,latitude,longitude,speed_kmh,satellites,timestamp
 NODE_01,10.200350,-83.281900,2.1,8,2026-04-12T21:15:36Z
 
+## Live Dashboard
+
+![Live Dashboard](docs/demo_dashboard.png)
+
 ## Related Project
 
 [wildlife-telemetry-pipeline](https://github.com/toshi-taz/wildlife-telemetry-pipeline) — Data processing and visualization pipeline (Movebank API + pandas + Folium)

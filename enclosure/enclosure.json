@@ -1,0 +1,16 @@
+{
+    "parameterSets": {
+        "design default values": {
+            "corner_r": "6",
+            "esp32_h": "13",
+            "esp32_l": "51",
+            "esp32_w": "28",
+            "gps_h": "6",
+            "gps_l": "26",
+            "gps_w": "23",
+            "margin": "4",
+            "wall": "3"
+        }
+    },
+    "fileFormatVersion": "1"
+}

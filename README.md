@@ -1,68 +1,95 @@
-# Wildlife Telemetry Node 🛰️
+# Wildlife Telemetry Node
 
-Arduino-based wildlife telemetry node simulating GPS tracking and LoRa radio transmission for conservation field deployments.
+IoT node for real-time marine turtle tracking at FFCM nesting camps (June 2026).
 
-Built as Track A of a dual-track conservation technology project developed at UPIEM–IPN.
+Built as part of the ISERI engineering program at IPN Zacatenco, bridging smart sensor networks and wildlife conservation.
 
-## Overview
+## Hardware
 
-This project simulates a field-deployable telemetry node that:
+| Component | Status |
+|-----------|--------|
+| NodeMCU ESP-32S | Active |
+| GPS u-blox NEO-6M (GY-GPS6MV2) | UART verified |
+| LoRa Ra-02 | Pending |
+| AMS1117 3.3V regulator | Pending |
+| 18650 battery holder | Pending |
+| IP65 enclosure (PETG) | Design phase |
 
-- Reads GPS coordinates (NEO-6M module)
-- Transmits data packets via LoRa radio (Ra-02, 433MHz)
-- Logs timestamped location data for wildlife monitoring
+## Architecture
 
-Target deployment: sea turtle nesting beaches and tropical wildlife reserves.
-
-## Hardware (Target)
-
-- Arduino Uno / ESP32
-- GPS module: u-blox NEO-6M
-- LoRa radio: Ra-02 (SX1278, 433MHz)
-
-## Simulation
-
-A Python simulator replicates the node's serial output and logs data to CSV for testing the pipeline without physical hardware.
-
-```bash
-pip install pandas folium
-python src/simulation/serial_simulator.py
+```
+GPS NEO-6M → ESP32 (UART2 GPIO16/17)
+ESP32 → WiFi → Flask API → SQLite
+Flask → Leaflet.js map (auto-refresh 10s)
 ```
 
-Visualize the simulated trajectory:
+## Stack
 
-```bash
-python src/simulation/visualizar_live.py
+- **Firmware:** Arduino (ESP32), TinyGPS++, HardwareSerial
+- **Backend:** Python 3, Flask, SQLite
+- **Frontend:** Leaflet.js, OpenStreetMap
+- **Deployment target:** Render.com (field server)
+
+## Wiring
+
+| GPS Pin | ESP32 Pin |
+|---------|-----------|
+| VCC | 3V3 |
+| GND | GND |
+| TX | GPIO16 (RX2) |
+| RX | GPIO17 (TX2) |
+
+## API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /api/location | Receive GPS fix from ESP32 |
+| GET | /api/locations | Retrieve last 100 locations |
+| GET | / | Leaflet map |
+
+### POST payload
+
+```json
+{
+  "lat": 19.432608,
+  "lng": -99.133209,
+  "alt": 2240.0,
+  "sat": 8
+}
 ```
 
-## Project Structure
+## Setup
 
-wildlife-telemetry-node/
-├── src/
-│ ├── telemetry_node.ino # Arduino sketch (GPS + LoRa)
-│ └── simulation/
-│ ├── serial_simulator.py # Python node simulator
-│ └── visualizar_live.py # Trajectory map generator
-├── data/ # Local logs (not uploaded)
-├── docs/ # Wiring diagrams and schematics
-└── README.md
+```bash
+cd server
+pip install flask
+python app.py
+```
 
-## Telemetry Packet Format
+Server runs on http://0.0.0.0:5000
 
-NODE_ID,latitude,longitude,speed_kmh,satellites,timestamp
-NODE_01,10.200350,-83.281900,2.1,8,2026-04-12T21:15:36Z
+## Roadmap
 
-## Live Dashboard
+- [x] GPS UART verified (NEO-6M → GPIO16/17)
+- [x] TinyGPS++ parsing NMEA
+- [x] ESP32 WiFi + HTTP POST
+- [x] Flask API + SQLite
+- [x] Leaflet map with auto-refresh
+- [ ] GPS fix confirmed outdoors
+- [ ] LoRa Ra-02 integration
+- [ ] IP65 enclosure (PETG, OpenSCAD)
+- [ ] Field test at FFCM camp — June 2026
+- [ ] MoveApps contribution
 
-![Live Dashboard](docs/demo_dashboard.png)
+## Field constraints
 
-## Related Project
-
-[wildlife-telemetry-pipeline](https://github.com/toshi-taz/wildlife-telemetry-pipeline) — Data processing and visualization pipeline (Movebank API + pandas + Folium)
+- No internet in nesting zones — LoRa mesh planned for offline operation
+- No drones permitted — ground-based nodes only
+- NOM-162-SEMARNAT-2012 compliant monitoring approach
 
 ## Author
 
-Alexander Toshiro Bataz López  
-Ingeniería en Sistemas Energéticos y Redes Inteligentes — UPIEM–IPN  
-Conservation Technology | Wildlife Telemetry | IoT Sensor Networks
-z
+Alexander Toshiro Bataz López (Toshi)  
+ISERI — IPN Zacatenco  
+abatazl2300@alumno.ipn.mx  
+github.com/toshi-taz

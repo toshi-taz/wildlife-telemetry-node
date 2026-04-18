@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Wildlife Telemetry Node</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #0f1117; color: #eee; }
+    #header { padding: 12px 20px; background: #1a1d27; border-bottom: 1px solid #2a2d3a; }
+    #header h1 { font-size: 16px; font-weight: 500; }
+    #header span { font-size: 12px; color: #888; margin-left: 12px; }
+    #map { height: calc(100vh - 44px); }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>Wildlife Telemetry Node
+      <span id="status">cargando...</span>
+    </h1>
+  </div>
+  <div id="map"></div>
+  <script>
+    const map = L.map('map').setView([19.43, -99.13], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    const markers = [];
+    const polyline = L.polyline([], {color: '#00ff88', weight: 2}).addTo(map);
+
+    async function fetchAndUpdate() {
+      try {
+        const res = await fetch('/api/locations');
+        const data = await res.json();
+
+        markers.forEach(m => map.removeLayer(m));
+        markers.length = 0;
+        polyline.setLatLngs([]);
+
+        const latlngs = [];
+        data.slice().reverse().forEach((p, i) => {
+          const isLast = i === data.length - 1;
+          const marker = L.circleMarker([p.lat, p.lng], {
+            radius: isLast ? 10 : 5,
+            fillColor: isLast ? '#00ff88' : '#0088ff',
+            color: '#fff',
+            weight: 1,
+            fillOpacity: 0.9
+          }).addTo(map);
+          marker.bindPopup(
+            `<b>Punto ${p.id}</b><br>
+             LAT: ${p.lat}<br>
+             LNG: ${p.lng}<br>
+             ALT: ${p.alt} m<br>
+             SAT: ${p.sat}<br>
+             ${p.timestamp}`
+          );
+          markers.push(marker);
+          latlngs.push([p.lat, p.lng]);
+        });
+
+        polyline.setLatLngs(latlngs);
+        if (latlngs.length) map.setView(latlngs[latlngs.length - 1], 15);
+
+        document.getElementById('status').textContent =
+          `${data.length} punto(s) — actualizado ${new Date().toLocaleTimeString()}`;
+      } catch(e) {
+        document.getElementById('status').textContent = 'error de conexión';
+      }
+    }
+
+    fetchAndUpdate();
+    setInterval(fetchAndUpdate, 10000);
+  </script>
+</body>
+</html>

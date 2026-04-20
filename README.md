@@ -1,50 +1,79 @@
 # Wildlife Telemetry Node
 
-IoT node for real-time marine turtle tracking at FFCM nesting camps (June 2026).
+Open-source conservation IoT project — ESP32 + GPS + LoRa sensor node for wildlife tracking in remote field conditions.
 
-Built as part of the ISERI engineering program at IPN Zacatenco, bridging smart sensor networks and wildlife conservation.
+**Author:** Alexander Toshiro Bataz López (Toshi)  
+**Program:** ISERI — IPN Zacatenco  
+**Contact:** abatazl2300@alumno.ipn.mx  
+**Repo:** github.com/toshi-taz/wildlife-telemetry-node
+
+---
+
+## Overview
+
+Ground-based telemetry node designed for wildlife monitoring under NOM-162-SEMARNAT-2012 field constraints. No internet required in nesting zones — LoRa handles offline transmission. GPS coordinates are stored in SQLite and visualized on a Leaflet map via Flask.
+
+Target deployment: FFCM sea turtle monitoring camp, June 2026.
+
+---
 
 ## Hardware
 
-| Component | Status |
-|-----------|--------|
-| NodeMCU ESP-32S | Active |
-| GPS u-blox NEO-6M (GY-GPS6MV2) | UART verified |
-| LoRa Ra-02 | Pending |
-| AMS1117 3.3V regulator | Pending |
-| 18650 battery holder | Pending |
-| IP65 enclosure (PETG) | Design phase |
+| Component | Model | Interface |
+|-----------|-------|-----------|
+| Microcontroller | ESP32-S Dev Module | — |
+| GPS | NEO-6M | UART (GPIO16 RX, GPIO17 TX) |
+| LoRa | Ra-02 433MHz | SPI |
+| Temp/Humidity | DHT11 | 1-Wire (GPIO4) |
+| Status LED | RGB cátodo común | GPIO25/26/27 |
+| Regulator | AMS1117 3.3V | — |
+| Charger | TP4056 (with protection) | microUSB |
+| Battery | Samsung ICR18650-26H ×3 parallel | — |
 
-## Architecture
+### Pin assignment
 
 ```
-GPS NEO-6M → ESP32 (UART2 GPIO16/17)
-ESP32 → WiFi → Flask API → SQLite
-Flask → Leaflet.js map (auto-refresh 10s)
+GPS RX    → GPIO16
+GPS TX    → GPIO17
+LoRa NSS  → GPIO5
+LoRa RST  → GPIO14
+LoRa DIO0 → GPIO2
+LoRa SCK  → GPIO18
+LoRa MOSI → GPIO23
+LoRa MISO → GPIO19
+DHT11     → GPIO4
+LED R     → GPIO25
+LED G     → GPIO26
+LED B     → GPIO27
 ```
+
+### LED status codes (field indicator)
+
+| Color | Pattern | Meaning |
+|-------|---------|---------|
+| Blue | Blinking | Searching GPS fix |
+| Green | Solid | Fix confirmed, transmitting |
+| Orange | Blinking | WiFi connected, no GPS yet |
+| Red | Blinking | Error (LoRa fail / low battery) |
+
+---
 
 ## Stack
 
-- **Firmware:** Arduino (ESP32), TinyGPS++, HardwareSerial
+- **Firmware:** Arduino (ESP32), TinyGPS++, LoRa, DHT
 - **Backend:** Python 3, Flask, SQLite
-- **Frontend:** Leaflet.js, OpenStreetMap
-- **Deployment target:** Render.com (field server)
+- **Frontend:** Leaflet.js
+- **Deployment:** Render.com (dashboard)
+- **Enclosure:** OpenSCAD → PETG print
 
-## Wiring
-
-| GPS Pin | ESP32 Pin |
-|---------|-----------|
-| VCC | 3V3 |
-| GND | GND |
-| TX | GPIO16 (RX2) |
-| RX | GPIO17 (TX2) |
+---
 
 ## API
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | /api/location | Receive GPS fix from ESP32 |
-| GET | /api/locations | Retrieve last 100 locations |
+| POST | /api/location | Receive GPS fix from node |
+| GET | /api/locations | Last 100 locations |
 | GET | / | Leaflet map |
 
 ### POST payload
@@ -58,6 +87,8 @@ Flask → Leaflet.js map (auto-refresh 10s)
 }
 ```
 
+---
+
 ## Setup
 
 ```bash
@@ -68,6 +99,19 @@ python app.py
 
 Server runs on http://0.0.0.0:5000
 
+---
+
+## Firmware versions
+
+| Version | Description |
+|---------|-------------|
+| v0.1 | GPS UART + TinyGPS++ |
+| v0.2 | WiFi + HTTP POST → Flask |
+| v0.3 | LoRa Ra-02 integrated, millis() loop, GPS debug |
+| v0.4 | DHT11 + LED RGB status (in progress) |
+
+---
+
 ## Roadmap
 
 - [x] GPS UART verified (NEO-6M → GPIO16/17)
@@ -75,21 +119,21 @@ Server runs on http://0.0.0.0:5000
 - [x] ESP32 WiFi + HTTP POST
 - [x] Flask API + SQLite
 - [x] Leaflet map with auto-refresh
+- [x] LoRa Ra-02 integrated — LoRa OK @ 433MHz confirmed
+- [x] millis() non-blocking loop
+- [x] GPS debug (charsProcessed, sentencesWithFix, satellites)
 - [ ] GPS fix confirmed outdoors
-- [ ] LoRa Ra-02 integration
-- [ ] IP65 enclosure (PETG, OpenSCAD)
-- [ ] Field test at FFCM camp — June 2026
+- [ ] DHT11 + LED RGB (v0.4)
+- [ ] AMS1117 + TP4056 on perfboard (permanent assembly)
+- [ ] IP65 enclosure — OpenSCAD v0.2 with real dimensions
+- [ ] Field test — FFCM camp, June 30 2026
 - [ ] MoveApps contribution
+
+---
 
 ## Field constraints
 
-- No internet in nesting zones — LoRa mesh planned for offline operation
+- No internet in nesting zones — LoRa handles offline transmission
 - No drones permitted — ground-based nodes only
 - NOM-162-SEMARNAT-2012 compliant monitoring approach
-
-## Author
-
-Alexander Toshiro Bataz López (Toshi)  
-ISERI — IPN Zacatenco  
-abatazl2300@alumno.ipn.mx  
-github.com/toshi-taz
+- Offline-capable, low-power, non-intrusive design

@@ -13,10 +13,10 @@
  *          El WTN es un transmisor ambiental, no un tracker.
  *          Geolocalización se maneja en el receptor (Xcacel base camp).
  *   [NEW]  Deep sleep 1 hora — ESP32 duerme entre transmisiones
- *          Ciclo: wake → leer DHT11 → TX LoRa → sleep 1hr
+ *          Ciclo: wake → leer DHT22 → TX LoRa → sleep 1hr
  *   [NEW]  FET switch GPIO32 — corta alimentación a periféricos
- *          (DHT11, LoRa Ra-02, LED) durante deep sleep
- *   [FIX]  DHT_TYPE corregido a DHT11 en código y comentarios
+ *          (DHT22, LoRa Ra-02, LED) durante deep sleep
+ *   [FIX]  DHT_TYPE corregido a DHT22 en código y comentarios
  *          (módulos físicos son CJSL DH11, no DHT22)
  *   [FIX]  Máquina de estados simplificada sin dependencia GPS
  *          TX LoRa se ejecuta apenas LoRa OK, sin esperar fix
@@ -24,7 +24,7 @@
  *  Hardware confirmado:
  *   ESP32 Dev Module
  *   LoRa  Ra-02    NSS->5  RST->14  DIO0->2  SCK->18  MOSI->23  MISO->19
- *   DHT11          DATA->GPIO4  (pull-up integrado en módulo)
+ *   DHT22          DATA->GPIO4  (pull-up integrado en módulo)
  *   LED RGB        R->GPIO25  G->GPIO26  B->GPIO27  (anodo comun, 220Ω)
  *   FET switch     GPIO32 (PMOS IRLML6244, pull-up 10kΩ a 3.3V en PCB)
  *   TP4056 + AMS1117-3.3 + triple 18650 paralelo
@@ -73,9 +73,9 @@ const int   LORA_NSS   = 5;
 const int   LORA_RST   = 14;
 const int   LORA_DIO0  = 2;
 
-// --- DHT11 ---
+// --- DHT22 ---
 const int   DHT_PIN  = 4;
-const int   DHT_TYPE = DHT11;
+const int   DHT_TYPE = DHT22;
 
 // --- LED RGB (anodo comun: LOW = encendido, HIGH = apagado) ---
 const int   LED_R = 25;
@@ -92,7 +92,7 @@ const int   FET_SW = 32;
 const uint64_t SLEEP_DURATION_US = 3600ULL * 1000000ULL;
 
 // --- Intervalos (milisegundos) ---
-const unsigned long DHT_INTERVAL   = 2500;  // DHT11: min 2s entre lecturas
+const unsigned long DHT_INTERVAL   = 2500;  // DHT22: min 2s entre lecturas
 const unsigned long PULSE_INTERVAL =  300;  // pulse LED durante TX
 const unsigned long LOG_INTERVAL   = 5000;  // log serial cada 5s
 
@@ -179,7 +179,7 @@ void enterDeepSleep() {
   ledOff();
   currentState = STATE_SLEEPING;
 
-  // Cortar alimentación a periféricos (DHT11, LoRa, LED)
+  // Cortar alimentación a periféricos (DHT22, LoRa, LED)
   // GPIO32 HIGH → PMOS off → +3.3V_SW desconectado
   digitalWrite(FET_SW, HIGH);
 
@@ -212,10 +212,10 @@ void setup() {
   ledOff();
   Serial.println("[LED] OK");
 
-  // DHT11
+  // DHT22
   dht.begin();
   lastDhtRead = millis();
-  Serial.println("[DHT11] OK");
+  Serial.println("[DHT22] OK");
 
   // WiFi (opcional — deshabilitado por defecto en campo)
 #ifdef WIFI_ENABLED
@@ -260,7 +260,7 @@ void loop() {
   unsigned long now = millis();
 
   // ----------------------------------------------------------
-  // 1. DHT11 — leer con timer propio (min 2s entre lecturas)
+  // 1. DHT22 — leer con timer propio (min 2s entre lecturas)
   //    Leer mas rapido devuelve NaN silencioso sin error.
   // ----------------------------------------------------------
   if (now - lastDhtRead >= DHT_INTERVAL) {
@@ -270,9 +270,9 @@ void loop() {
     if (!isnan(t) && !isnan(h)) {
       temperature = t;
       humidity    = h;
-      Serial.printf("[DHT11] T:%.1fC  H:%.1f%%\n", temperature, humidity);
+      Serial.printf("[DHT22] T:%.1fC  H:%.1f%%\n", temperature, humidity);
     } else {
-      Serial.println("[DHT11] Lectura invalida (NaN) — reintentando en 2.5s");
+      Serial.println("[DHT22] Lectura invalida (NaN) — reintentando en 2.5s");
     }
   }
 
